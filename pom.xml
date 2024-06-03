@@ -1,0 +1,26 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<properties>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+	</properties>
+	<groupId>AutoIntruder</groupId>
+	<artifactId>AutoIntruder</artifactId>
+	<version>0.0.1</version>
+	<name>AutoIntruder</name>
+	<description>AutoIntruder</description>
+	<dependencies>
+		<dependency>
+			<groupId>net.portswigger.burp.extensions</groupId>
+			<artifactId>montoya-api</artifactId>
+			<version>LATEST</version>
+		</dependency>
+		<dependency>
+			<groupId>com.jgoodies</groupId>
+			<artifactId>jgoodies-forms</artifactId>
+			<version>1.8.0</version>
+		</dependency>
+	</dependencies>
+</project>
