@@ -32,17 +32,15 @@ of the the pattern in the request history.
     
 
 ## Usage
-
+```sh
 Step 1. Create a regex pattern you want AutoIntruder to find in the Proxy history
 Step 2. Add some filter rules (Like only requests that are in scope)
 Step 3. Add some payloads in the payloads tab
 Step 4. Decide which requests you want to enable and which to disable
 Step 5. Send the requests
-Step 6. Profit
-
-```sh
-example code or command
+Step 6. Find vulns
 ```
+
 
 ## Typical Use Case
 You are performing a penteration test/Bug Bounty/Research and you want to test for IDORs, but the application is BIG and there are a lot of places where the app is using UUIDs if object ids.
