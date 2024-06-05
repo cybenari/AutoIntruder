@@ -9,7 +9,7 @@ of the the pattern in the request history.
 
 - [Installation](#installation)
 - [Usage](#usage)
-- [typical-use-case](#Typical Use Case)
+- [Typical Use Case](#typical-use-case)
 - [Contact](#contact)
 
 ## Installation
