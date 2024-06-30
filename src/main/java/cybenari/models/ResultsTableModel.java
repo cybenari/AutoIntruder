@@ -8,7 +8,7 @@ import java.util.List;
 public class ResultsTableModel extends MyAbstractTableModel {
 	private List<AttackCandidate> log;
 	private final Logging logging;
-	private int maxTableSize = 5000;
+	private int maxTableSize = 20000;
 
 	public ResultsTableModel(Logging logging) {
 		this.log = new ArrayList<>();
@@ -32,7 +32,7 @@ public class ResultsTableModel extends MyAbstractTableModel {
 
 	@Override
 	public int getColumnCount() {
-		return 11;
+		return 12;
 	}
 
 	@Override
@@ -60,6 +60,8 @@ public class ResultsTableModel extends MyAbstractTableModel {
 			return "Modified response size";
 		case 10:
 			return "Execution Status";
+		case 11:
+			return "Change Type";
 		default:
 			return "";
 		}
@@ -113,6 +115,8 @@ public class ResultsTableModel extends MyAbstractTableModel {
 			return "";
 		case 10:
 			return candidate.getResultStatus();
+		case 11:
+			return candidate.getReplaceType().toString();
 		default:
 			return "";
 		}

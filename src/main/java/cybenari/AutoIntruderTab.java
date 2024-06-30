@@ -1,4 +1,4 @@
-package cybenari.models;
+package cybenari;
 
 import static burp.api.montoya.ui.editor.EditorOptions.READ_ONLY;
 
@@ -13,22 +13,25 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import javax.swing.*;
+import javax.swing.border.Border;
 import javax.swing.table.TableRowSorter;
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.logging.Logging;
 import burp.api.montoya.proxy.ProxyHttpRequestResponse;
+import burp.api.montoya.ui.Selection;
 import burp.api.montoya.ui.UserInterface;
 import burp.api.montoya.ui.editor.HttpRequestEditor;
 import burp.api.montoya.ui.editor.HttpResponseEditor;
-import cybenari.AnalysisEngine;
-import cybenari.AttackCandidate;
-import cybenari.MatchRule;
-import cybenari.PayloadScraper;
-import cybenari.RequestSendingManager;
+import cybenari.models.MyAbstractTableModel;
+import cybenari.models.RequestsTableModel;
+import cybenari.models.ResultsTableModel;
+import cybenari.models.RulesTableModel;
 import cybenari.rules.*;
 
 import cybenari.rules.AbstractRule.OPERATION;
@@ -49,11 +52,22 @@ public class AutoIntruderTab extends JPanel {
 		requestsTableModel = new RequestsTableModel(api.logging());
 		resultsTableModel = new ResultsTableModel(api.logging());
 		rulesTableModel = new RulesTableModel();
+		addDefaultRules();
 		this.sendingManager = new RequestSendingManager(resultsTableModel, api);
 
 		this.setLayout(new BorderLayout(0, 0));
 		this.add(constructLoggerTab(requestsTableModel, api.logging(), resultsTableModel));
 
+	}
+
+	private void addDefaultRules() {
+		InScopeRule rule = new InScopeRule();
+		rule.setEnabled(true);
+		rule.setMatchPattern(".");
+		rule.setOperation(OPERATION.AND);
+		rule.setRequestOrResponse(REQUEST_RESPONSE.REQUEST);
+
+		this.rulesTableModel.add(rule);
 	}
 
 	private Component constructLoggerTab(RequestsTableModel requestsTableModel, Logging logging,
@@ -68,7 +82,6 @@ public class AutoIntruderTab extends JPanel {
 		tabbedPane.addTab("Configuration", generateConfigurationPanel(logging, requestsTableModel));
 		tabbedPane.addTab("Payloads", generatePayloadsPanel(requestsTableModel, resultsTableModel));
 		tabbedPane.addTab("Results", generateResultsPanel(resultsTableModel));
-		
 
 		// Adding the tabbed pane to the Main Panel
 		mainPanel.add(tabbedPane);
@@ -91,10 +104,21 @@ public class AutoIntruderTab extends JPanel {
 		HttpResponseEditor originalResponseViewer = userInterface.createHttpResponseEditor(READ_ONLY);
 		HttpResponseEditor modifiedResponseViewer = userInterface.createHttpResponseEditor(READ_ONLY);
 
-		requestsResponsesTabs.addTab("Original Request", originalRequestViewer.uiComponent());
-		requestsResponsesTabs.addTab("Original Response", originalResponseViewer.uiComponent());
-		requestsResponsesTabs.addTab("Modified Request", modifiedRequestViewer.uiComponent());
-		requestsResponsesTabs.addTab("Modified Response", modifiedResponseViewer.uiComponent());
+		JTabbedPane original = new JTabbedPane();
+		JTabbedPane modified = new JTabbedPane();
+		requestsResponsesTabs.addTab("Original", original);
+		requestsResponsesTabs.addTab("Modified", modified);
+
+		JSplitPane requestResponseSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+		original.add(requestResponseSplitPane);
+
+		JSplitPane modifiedRequestResponseSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+		modified.add(modifiedRequestResponseSplitPane);
+
+		requestResponseSplitPane.add(originalRequestViewer.uiComponent());
+		requestResponseSplitPane.add(originalResponseViewer.uiComponent());
+		modifiedRequestResponseSplitPane.add(modifiedRequestViewer.uiComponent());
+		modifiedRequestResponseSplitPane.add(modifiedResponseViewer.uiComponent());
 
 		// table of log entries
 		JTable table = new JTable(resultsTableModel) {
@@ -214,7 +238,6 @@ public class AutoIntruderTab extends JPanel {
 
 	}
 
-
 	private JPanel generateConfigurationPanel(Logging logging, RequestsTableModel tableModel) {
 
 		JPanel configurationTab = new JPanel();
@@ -237,16 +260,15 @@ public class AutoIntruderTab extends JPanel {
 		JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, rightPanel);
 		splitPane.setDividerLocation(0.3); // Set the initial divider location (30% of the width)
 		splitPane.setResizeWeight(0.3); // Set the resize weight to distribute extra space (70% to the right panel)
-		//splitPane.setEnabled(false);
-		
-
-		
+		// splitPane.setEnabled(false);
 
 		JTextField parameterPatternTextField = new JTextField();
 		parameterPatternTextField.setColumns(20);
+		parameterPatternTextField.setText(".*");
 
 		// ComboBox setup
 		JComboBox<String> optionsComboBox = new JComboBox<>();
+		optionsComboBox.addItem(" ");
 
 		// generate regex options
 		Properties properties = PayloadScraper.getRegexOptions();
@@ -268,8 +290,9 @@ public class AutoIntruderTab extends JPanel {
 
 			}
 		});
-		JLabel paramLabel = new JLabel("Parameter Pattern (Regex)");
-		JLabel builtInRegexLabel = new JLabel("Built-in Regex:");
+
+		JLabel paramLabel = new JLabel("Replace Pattern (Regex)");
+		JLabel builtInRegexLabel = new JLabel("Built-in Regex");
 
 		JPanel methodsPanel = new JPanel();
 
@@ -293,11 +316,10 @@ public class AutoIntruderTab extends JPanel {
 
 		JCheckBox optionsMethodCheckbox = new JCheckBox("OPTIONS");
 		methodsPanel.add(optionsMethodCheckbox);
-		
-		
-		//param type panel
+
+		// param type panel
 		JPanel paramTypePanel = new JPanel();
-		JLabel paramTypeLabel = new JLabel("Only replace in these params:");
+		JLabel paramTypeLabel = new JLabel("Only replace in these params types:");
 		JCheckBox URLparamsCheckbox = new JCheckBox("Query Params");
 		URLparamsCheckbox.setSelected(true);
 
@@ -306,110 +328,147 @@ public class AutoIntruderTab extends JPanel {
 
 		JCheckBox bodyParamsCheckbox = new JCheckBox("Body Params");
 		bodyParamsCheckbox.setSelected(true);
+
+		JCheckBox headerValuesParamsCheckbox = new JCheckBox("Header Values");
+		bodyParamsCheckbox.setSelected(true);
+
 		paramTypePanel.add(URLparamsCheckbox);
 		paramTypePanel.add(pathParamsCheckbox);
 		paramTypePanel.add(bodyParamsCheckbox);
-		
+		paramTypePanel.add(headerValuesParamsCheckbox);
+
 		JButton generateRequestsButton = new JButton("Generate Requests");
 		generateRequestsButton.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(MouseEvent e) {
 
-				MatchRule rule = new MatchRule();
-				rule.setGetMethodEnabled(getMethodCheckbox.isSelected());
-				rule.setPostMethodEnabled(postMethodCheckbox.isSelected());
-				rule.setPutMethodEnabled(putMethodCheckbox.isSelected());
-				rule.setDeleteMethodEnabled(deleteMethodCheckbox.isSelected());
-				rule.setPatchMethodEnabled(patchMethodCheckbox.isSelected());
-				rule.setOptionsMethodEnabled(optionsMethodCheckbox.isSelected());
-				rule.setURLParamEnabled(URLparamsCheckbox.isSelected());
-				rule.setPathParamEnabled(pathParamsCheckbox.isSelected());
-				rule.setBodyParamEnabled(bodyParamsCheckbox.isSelected());
-				
-				try {
-					rule.setParameterPattern(Pattern.compile(parameterPatternTextField.getText()));
-				} catch (PatternSyntaxException exception) {
-					logging.logToError(exception.getDescription());
-				}
+				if (isValidRegex(parameterPatternTextField.getText())) {
+					MatchRule rule = new MatchRule();
+					rule.setGetMethodEnabled(getMethodCheckbox.isSelected());
+					rule.setPostMethodEnabled(postMethodCheckbox.isSelected());
+					rule.setPutMethodEnabled(putMethodCheckbox.isSelected());
+					rule.setDeleteMethodEnabled(deleteMethodCheckbox.isSelected());
+					rule.setPatchMethodEnabled(patchMethodCheckbox.isSelected());
+					rule.setOptionsMethodEnabled(optionsMethodCheckbox.isSelected());
+					rule.setURLParamEnabled(URLparamsCheckbox.isSelected());
+					rule.setPathParamEnabled(pathParamsCheckbox.isSelected());
+					rule.setBodyParamEnabled(bodyParamsCheckbox.isSelected());
+					rule.setHeaderValuesEnabled(headerValuesParamsCheckbox.isSelected());
 
-				logging.logToOutput(rule.toString());
+					try {
+						rule.setParameterPattern(Pattern.compile(parameterPatternTextField.getText()));
+					} catch (PatternSyntaxException exception) {
+						logging.logToError(exception.getDescription());
+					}
 
-				AnalysisEngine engine = new AnalysisEngine(logging);
+					logging.logToOutput(rule.toString());
 
-				ArrayList<ProxyHttpRequestResponse> history = (ArrayList<ProxyHttpRequestResponse>) api.proxy()
-						.history();
+					AnalysisEngine engine = new AnalysisEngine(logging);
 
-				for (ProxyHttpRequestResponse requestResponse : history) {
+					ArrayList<ProxyHttpRequestResponse> history = (ArrayList<ProxyHttpRequestResponse>) api.proxy()
+							.history();
 
-					ArrayList<AttackCandidate> attackCandidates = engine.analyzeRequest(requestResponse,
-							rulesTableModel.getAll(), rule);
-					for (AttackCandidate candidate : attackCandidates) {
+					for (ProxyHttpRequestResponse requestResponse : history) {
 
-						if (!tableModel.contains(candidate)) {
-							tableModel.add(candidate);
+						ArrayList<AttackCandidate> attackCandidates = engine.analyzeRequest(requestResponse,
+								rulesTableModel.getAll(), rule);
+						for (AttackCandidate candidate : attackCandidates) {
+
+							if (!tableModel.contains(candidate)) {
+								tableModel.add(candidate);
+							}
 						}
 					}
+
+					if (tableModel.getRowCount() == 0) {
+						JOptionPane.showMessageDialog(builtInRegexLabel, "No Results Found");
+					}
+
+				} else {
+					JOptionPane.showMessageDialog(builtInRegexLabel,
+							"Parameter pattern is not a valid Regular Expression", "Error", JOptionPane.ERROR_MESSAGE);
 				}
-
-				JOptionPane.showMessageDialog(builtInRegexLabel, "Task Complete!");
-
 			}
 		});
 
 		JPanel rulesPanel = generateRulesPanel();
+		JLabel rulesLabel = new JLabel("Additional Filter Rules");
+
 		JPanel rulesButtonsPanel = generateRuleButtonsPanel();
 
 		rightPanel.add(generateRequestsTab(requestsTableModel), BorderLayout.CENTER);
 
+		// panel for the labels and textbox of the paramter pattern
+		JPanel parameterPanel = new JPanel(new GridBagLayout());
+		GridBagConstraints Panelgbc = new GridBagConstraints();
+		Panelgbc.insets = new Insets(5, 5, 5, 5);
+		Panelgbc.fill = GridBagConstraints.NONE;
+		Panelgbc.anchor = GridBagConstraints.NORTHWEST;
+
+		Panelgbc.gridx = 0;
+		Panelgbc.gridy = 0;
+		parameterPanel.add(paramLabel, Panelgbc);
+
+		Panelgbc.gridx = 1;
+		parameterPanel.add(builtInRegexLabel, Panelgbc);
+
+		Panelgbc.gridy = 1;
+		Panelgbc.gridx = 0;
+		parameterPanel.add(parameterPatternTextField, Panelgbc);
+
+		Panelgbc.gridx = 1;
+		parameterPanel.add(optionsComboBox, Panelgbc);
+
 		// First row:
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        
-        leftPanel.add(paramLabel,gbc);
-       
-        gbc.gridy = 1;
-        leftPanel.add(parameterPatternTextField,gbc);
-        
-        
-        gbc.gridy = 2;
-        leftPanel.add(builtInRegexLabel,gbc);
-        
-        gbc.gridy = 3;
-        leftPanel.add(optionsComboBox,gbc);
-        
-        
-        gbc.gridy = 5;
-        leftPanel.add(paramTypeLabel,gbc);
-        
-        gbc.gridy = 6;
-        leftPanel.add(paramTypePanel,gbc);
-        
-        gbc.gridy = 7;
-        leftPanel.add(rulesPanel,gbc);
-        
-        gbc.gridy = 8;
-        leftPanel.add(rulesButtonsPanel,gbc);
-        
-        gbc.gridy = 9;
-		leftPanel.add(generateRequestsButton,gbc);
+		gbc.gridx = 0;
+		gbc.gridy = 0;
+		leftPanel.add(parameterPanel, gbc);
+
+		gbc.gridy = 3;
+		leftPanel.add(paramTypeLabel, gbc);
+
+		gbc.gridy = 4;
+		leftPanel.add(paramTypePanel, gbc);
+
+		gbc.gridy = 8;
+		leftPanel.add(rulesLabel, gbc);
+
+		gbc.gridy = 9;
+		leftPanel.add(rulesPanel, gbc);
+
+		gbc.gridy = 10;
+		leftPanel.add(rulesButtonsPanel, gbc);
+
+		gbc.gridy = 11;
+		leftPanel.add(generateRequestsButton, gbc);
 
 		configurationTab.add(splitPane, BorderLayout.CENTER);
 
 		return configurationTab;
 	}
 
+	public static boolean isValidRegex(String regex) {
+		try {
+			Pattern.compile(regex);
+			return true;
+		} catch (PatternSyntaxException e) {
+			return false;
+		}
+	}
+
 	private JPanel generateRuleButtonsPanel() {
 		JPanel buttonsPanel = new JPanel(new FlowLayout());
 
 		JButton addButton = new JButton("Add");
-		
+
 		JButton removeButton = new JButton("Remove");
 
 		addButton.addActionListener(e -> {
 			// JWindow popupWindow = new JWindow();
+			addButton.setEnabled(false);
 			JDialog popupWindow = new JDialog();
 
-			popupWindow.add(generateRulesPopUpMenu(popupWindow));
+			popupWindow.add(generateRulesPopUpMenu(popupWindow, addButton));
 			popupWindow.setSize(400, 250);
 			popupWindow.setVisible(true);
 			popupWindow.setTitle("Add new Rule");
@@ -426,13 +485,14 @@ public class AutoIntruderTab extends JPanel {
 		});
 
 		buttonsPanel.add(addButton);
-		
+
 		buttonsPanel.add(removeButton);
 
 		return buttonsPanel;
 	}
 
-	private JPanel generateRulesPopUpMenu(JDialog thisDialog) {
+	private JPanel generateRulesPopUpMenu(JDialog thisDialog, JButton callerButton) {
+		callerButton.setEnabled(true);
 		JPanel addRuleMenu = new JPanel(new GridBagLayout());
 
 		GridBagConstraints constraints = new GridBagConstraints();
@@ -474,6 +534,8 @@ public class AutoIntruderTab extends JPanel {
 		TypeBox.addItem("Method");
 		TypeBox.addItem("Body");
 		TypeBox.addItem("In Scope");
+		TypeBox.addItem("Cookie Value");
+		TypeBox.addItem("Status Code");
 		addRuleMenu.add(TypeBox, constraints);
 
 		// row 4
@@ -495,6 +557,7 @@ public class AutoIntruderTab extends JPanel {
 		addRuleMenu.add(okButton, constraints);
 
 		okButton.addActionListener(e -> {
+
 			AbstractRule rule;
 
 			switch ((String) TypeBox.getSelectedItem()) {
@@ -516,6 +579,12 @@ public class AutoIntruderTab extends JPanel {
 			case "In Scope":
 				rule = new InScopeRule();
 				break;
+			case "Cookie Value":
+				rule = new CookieValueRule();
+				break;
+			case "Status Code":
+				rule = new StatusCodeRule();
+				break;
 			default:
 				rule = new PathRule();
 			}
@@ -525,7 +594,7 @@ public class AutoIntruderTab extends JPanel {
 			} else {
 				rule.setOperation(OPERATION.OR);
 			}
-			
+
 			if (requestResponseComboBox.getSelectedItem().equals("Request")) {
 				rule.setRequestOrResponse(REQUEST_RESPONSE.REQUEST);
 			} else {
@@ -533,7 +602,6 @@ public class AutoIntruderTab extends JPanel {
 			}
 
 			rule.setMatchPattern(pattern.getText());
-			
 
 			this.rulesTableModel.add(rule);
 			thisDialog.dispose();
@@ -561,16 +629,22 @@ public class AutoIntruderTab extends JPanel {
 
 		// tabs with request/response viewers
 		JTabbedPane requestsResponsesTabs = new JTabbedPane();
+		JSplitPane requestResponseSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+		JSplitPane modifiedRequestResponseSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
 
+		requestsResponsesTabs.addTab("Original", requestResponseSplitPane);
+		requestsResponsesTabs.add("Modified", modifiedRequestResponseSplitPane);
 		UserInterface userInterface = api.userInterface();
 
 		HttpRequestEditor originalRequestViewer = userInterface.createHttpRequestEditor(READ_ONLY);
 		HttpRequestEditor modifiedRequestViewer = userInterface.createHttpRequestEditor();
 		HttpResponseEditor originalResponseViewer = userInterface.createHttpResponseEditor(READ_ONLY);
 
-		requestsResponsesTabs.addTab("Original Request", originalRequestViewer.uiComponent());
-		requestsResponsesTabs.addTab("Modified Request", modifiedRequestViewer.uiComponent());
-		requestsResponsesTabs.addTab("Original Response", originalResponseViewer.uiComponent());
+		requestResponseSplitPane.add(originalRequestViewer.uiComponent());
+		modifiedRequestResponseSplitPane.add(modifiedRequestViewer.uiComponent());
+		requestResponseSplitPane.add(originalResponseViewer.uiComponent());
+
+		requestResponseSplitPane.setDividerLocation(0.5);
 
 		// table of log entries
 		JTable table = new JTable(tableModel) {
@@ -579,6 +653,17 @@ public class AutoIntruderTab extends JPanel {
 				// show the log entry for the selected row
 
 				int modelRow = convertRowIndexToModel(rowIndex);
+				// auto save request each time selection is changed
+
+				HttpRequest modifiedRequest = modifiedRequestViewer.getRequest();
+				
+				if (modificationIsValid(modifiedRequest)) {
+					saveChangesToTableItem(this, requestsTableModel, modifiedRequest);
+				} else {
+					JOptionPane.showMessageDialog(this, "Number of § must be 2");
+				}
+
+				// updated view
 				AttackCandidate candidate = tableModel.get(modelRow);
 				originalRequestViewer.setRequest(candidate.getOriginalRequest());
 				modifiedRequestViewer.setRequest(candidate.getModifiedRequest());
@@ -586,7 +671,30 @@ public class AutoIntruderTab extends JPanel {
 
 				super.changeSelection(rowIndex, columnIndex, toggle, extend);
 			}
+
+			private boolean modificationIsValid(HttpRequest modifiedRequest) {
+				int count = 0;
+				String requestString = modifiedRequest.toString();
+				for (int i = 0; i < requestString.length(); i++) {
+					if (requestString.charAt(i) == '§') {
+						count++;
+					}
+
+					if (count > 2) {
+						return false; // Early exit if more than 2 '$' characters found
+					}
+				}
+
+				return count == 2;
+
+			}
+
 		};
+
+		if (modifiedRequestViewer.isModified()) {
+			System.out.println("change");
+
+		}
 
 		TableRowSorter<RequestsTableModel> sorter = new TableRowSorter<>(tableModel);
 		table.setRowSorter(sorter);
@@ -595,9 +703,12 @@ public class AutoIntruderTab extends JPanel {
 		JMenuItem disableMenuItemView = new JMenuItem("Disable");
 		JMenuItem enableMenuItemView = new JMenuItem("Enable");
 		JMenuItem deleteMenuItemView = new JMenuItem("Delete");
+		
 		popupMenu.add(disableMenuItemView);
 		popupMenu.add(enableMenuItemView);
 		popupMenu.add(deleteMenuItemView);
+		
+
 
 		// right click->delete item
 		deleteMenuItemView.addActionListener(e -> {
@@ -695,6 +806,19 @@ public class AutoIntruderTab extends JPanel {
 
 	}
 
+	private void saveChangesToTableItem(JTable table, MyAbstractTableModel myModel, HttpRequest modifiedRequest) {
+		int selectRowIndex = table.getSelectedRow();
+
+		if (selectRowIndex > 0) {
+			int modelIndex = table.convertRowIndexToModel(selectRowIndex);
+
+			AttackCandidate candidate = myModel.get(modelIndex);
+
+			candidate.setModifiedRequest(modifiedRequest);
+		}
+
+	}
+
 	private void disableSelectedTableItems(JTable table, MyAbstractTableModel myModel) {
 		int[] selectRowIndexes = table.getSelectedRows();
 
@@ -707,22 +831,28 @@ public class AutoIntruderTab extends JPanel {
 
 	private JPanel generatePayloadsPanel(RequestsTableModel requestsTableModel, ResultsTableModel resultsTableModel) {
 		// payloads Panel
-		
+
 		JPanel payloadsPanel = new JPanel();
 		payloadsPanel.setLayout(new BorderLayout());
-		
 
-		JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		JPanel parameterPanel = new JPanel(new GridBagLayout());
+		GridBagConstraints Panelgbc = new GridBagConstraints();
+		Panelgbc.insets = new Insets(5, 5, 5, 5);
+		Panelgbc.fill = GridBagConstraints.NONE;
+		Panelgbc.anchor = GridBagConstraints.NORTHWEST;
+
+		// JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		JLabel payloadRegexLabel = new JLabel("Payload Regex:");
 		JTextField payloadRegexTextField = new JTextField(40);
 		payloadRegexTextField.setToolTipText("A regex pattern for fetching payloads");
 
 		JButton generatePayloadsButton = new JButton("Auto Generate Payloads");
-		JCheckBox inScopeOnlyCheckbox = new JCheckBox("Search payloads in-scope parameters only");
+		JCheckBox inScopeOnlyCheckbox = new JCheckBox("Search payloads in-scope only");
 		inScopeOnlyCheckbox.setSelected(true);
 
 		// ComboBox setup
 		JComboBox<String> optionsComboBox = new JComboBox<>();
+		optionsComboBox.addItem("");
 
 		// generate regex options
 		Properties properties = PayloadScraper.getRegexOptions();
@@ -745,17 +875,31 @@ public class AutoIntruderTab extends JPanel {
 			}
 		});
 
-		payloadRegexTextField.setText(".*");
+		payloadRegexTextField.setText("[a-zA-Z0-9]{15}");
 
-		topPanel.add(payloadRegexLabel);
-		topPanel.add(payloadRegexTextField);
-		topPanel.add(inScopeOnlyCheckbox);
-		topPanel.add(optionsComboBox);
-		topPanel.add(generatePayloadsButton);
+		Panelgbc.gridx = 0;
+		Panelgbc.gridy = 0;
+		parameterPanel.add(new JLabel("Payload"), Panelgbc);
 
-	
-		//payloadsPanel.setLayout(new BorderLayout());
-		
+		Panelgbc.gridx = 1;
+		parameterPanel.add(new JLabel("Built-in Regex"), Panelgbc);
+
+		Panelgbc.gridx = 0;
+		Panelgbc.gridy = 1;
+		parameterPanel.add(payloadRegexTextField, Panelgbc);
+
+		Panelgbc.gridx = 1;
+		parameterPanel.add(optionsComboBox, Panelgbc);
+
+		Panelgbc.gridx = 0;
+		Panelgbc.gridy = 2;
+		parameterPanel.add(inScopeOnlyCheckbox, Panelgbc);
+
+		Panelgbc.gridx = 0;
+		Panelgbc.gridy = 3;
+		parameterPanel.add(generatePayloadsButton, Panelgbc);
+
+		// payloadsPanel.setLayout(new BorderLayout());
 
 		// Model for the list
 		DefaultListModel<String> payloadsList = new DefaultListModel<>();
@@ -769,7 +913,7 @@ public class AutoIntruderTab extends JPanel {
 		JButton removeButton = new JButton("Remove");
 		JButton clearButton = new JButton("Clear");
 		JButton pasteButton = new JButton("Paste");
-		JButton generatetAttackButton = new JButton("Generate Attack");
+		JButton generatetAttackButton = new JButton("Generate Attack Candidates");
 
 		JTextField addTextField = new JTextField(30); // text field with 10 columns
 
@@ -859,27 +1003,24 @@ public class AutoIntruderTab extends JPanel {
 		controlPanel.add(addButton);
 		controlPanel.add(addTextField);
 
-		
-
 		// Adding panels to the frame
-		topPanel.setPreferredSize(new Dimension(800,180));
-		payloadsPanel.add(topPanel,BorderLayout.NORTH);
-		
+		// topPanel.setPreferredSize(new Dimension(800, 180));
+		payloadsPanel.add(parameterPanel, BorderLayout.NORTH);
+
 		JPanel middlePanel = new JPanel();
 		middlePanel.setLayout(new BorderLayout());
-		
-		middlePanel.setPreferredSize(new Dimension(800,300));
-		middlePanel.add(listPanel,BorderLayout.CENTER);
-		middlePanel.add(controlPanel,BorderLayout.SOUTH);
-		
-		payloadsPanel.add(middlePanel,BorderLayout.CENTER);
-		
-		JPanel buttomPanel = new JPanel();
-		buttomPanel.setPreferredSize(new Dimension(800,120));
-		buttomPanel.add(generatetAttackButton);
-		payloadsPanel.add(buttomPanel,BorderLayout.SOUTH);
 
-		
+		middlePanel.setPreferredSize(new Dimension(800, 300));
+		middlePanel.add(listPanel, BorderLayout.CENTER);
+		middlePanel.add(controlPanel, BorderLayout.SOUTH);
+
+		payloadsPanel.add(middlePanel, BorderLayout.CENTER);
+
+		JPanel buttomPanel = new JPanel();
+		buttomPanel.setPreferredSize(new Dimension(800, 120));
+		buttomPanel.add(generatetAttackButton);
+		payloadsPanel.add(buttomPanel, BorderLayout.SOUTH);
+
 		return payloadsPanel;
 	}
 }

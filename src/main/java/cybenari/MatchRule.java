@@ -5,12 +5,14 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import burp.api.montoya.http.message.HttpHeader;
 import burp.api.montoya.http.message.params.HttpParameter;
 import burp.api.montoya.http.message.params.HttpParameterType;
 import burp.api.montoya.http.message.params.ParsedHttpParameter;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.proxy.ProxyHttpRequestResponse;
 import cybenari.AbstractAttackType.AttackTypeName;
+import cybenari.AttackCandidate.REPLACE_TYPE;
 
 public class MatchRule {
 
@@ -33,6 +35,7 @@ public class MatchRule {
 	private boolean isBodyParamEnabled = true;
 	private boolean isPathParamEnabled = true;
 	private boolean isURLParamEnabled = true;
+	private boolean isHeaderValuesEnabled = true;
 	
 
 	public MatchRule() {
@@ -190,6 +193,7 @@ public class MatchRule {
 			candidate.setModifiedRequest(request.withBody(tempBuffer.toString()));
 			candidate.setOriginalResponse(requestResponse.originalResponse());
 			candidate.setOriginalPayload(originalPayload);
+			candidate.setReplaceType(REPLACE_TYPE.BODY);
 			attackCandidates.add(candidate);
 
 		}
@@ -219,6 +223,7 @@ public class MatchRule {
 				candidate.setOriginalResponse(requestResponse.originalResponse());
 				candidate.setModifiedRequest(requestResponse.request().withUpdatedParameters(newParam));
 				candidate.setOriginalPayload(originalPayload);
+				candidate.setReplaceType(REPLACE_TYPE.QUERY);
 				attackCandidates.add(candidate);
 			}
 
@@ -249,10 +254,45 @@ public class MatchRule {
 			attackCandidate.setModifiedRequest(request.withPath(tempBuffer.toString()));
 			attackCandidate.setOriginalResponse(requestResponse.originalResponse());
 			attackCandidate.setOriginalPayload(originalPayload);
+			attackCandidate.setReplaceType(REPLACE_TYPE.PATH);
 			attackCandidates.add(attackCandidate);
 		}
 
 		return attackCandidates;
+	}
+	
+	public ArrayList<AttackCandidate> findPatternsInHeaderValues(ProxyHttpRequestResponse requestResponse) {
+		ArrayList<AttackCandidate> attackCandidates = new ArrayList<>();
+		HttpRequest request = requestResponse.request();
+		
+		for(HttpHeader header : request.headers()) {
+			String headerValue = header.value();
+			Matcher matcher = getParameterPattern().matcher(headerValue);
+			
+			while (matcher.find()) {
+				String match = matcher.group();
+				String matchWithPlaceHolders = matchPlaceHolder + match + matchPlaceHolder;
+				int matchStart = matcher.start();
+				int matchEnd = matcher.end();
+				String originalPayload = headerValue.substring(matchStart, matchEnd);
+				
+				StringBuffer tempBuffer = new StringBuffer(headerValue);
+				// Replace the current match with "placeholder"
+				tempBuffer.replace(matcher.start(), matcher.end(), matchWithPlaceHolders);
+
+				AttackCandidate attackCandidate = new AttackCandidate(request, AttackTypeName.CustomRule);
+				attackCandidate.setModifiedRequest(request.withHeader(header.name(), tempBuffer.toString()));
+				
+				attackCandidate.setOriginalResponse(requestResponse.originalResponse());
+				attackCandidate.setOriginalPayload(originalPayload);
+				attackCandidate.setReplaceType(REPLACE_TYPE.HEADER_VALUE);
+				attackCandidates.add(attackCandidate);
+				
+			}
+		}
+		
+		return attackCandidates;
+		
 	}
 
 	public boolean isDeleteMethodEnabled() {
@@ -305,6 +345,14 @@ public class MatchRule {
 
 	public void setURLParamEnabled(boolean isURLParamEnabled) {
 		this.isURLParamEnabled = isURLParamEnabled;
+	}
+
+	public boolean isHeaderValuesEnabled() {
+		return isHeaderValuesEnabled;
+	}
+
+	public void setHeaderValuesEnabled(boolean isHeaderValuesEnabled) {
+		this.isHeaderValuesEnabled = isHeaderValuesEnabled;
 	}
 
 }

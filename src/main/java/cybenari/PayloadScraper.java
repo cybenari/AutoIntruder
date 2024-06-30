@@ -62,6 +62,7 @@ public class PayloadScraper {
 				if (!requestResponse.request().isInScope() && isInScopeOnly()) {
 					continue;
 				}
+				/*
 				// gets all matching param values from requests
 				for (ParsedHttpParameter parameter : requestResponse.request().parameters()) {
 					Matcher matcher = getPayloadPattern().matcher(parameter.value());
@@ -71,10 +72,19 @@ public class PayloadScraper {
 						}
 					}
 				}
+				*/
+				
+				Matcher matcher = getPayloadPattern().matcher(requestResponse.request().bodyToString());
+				while (matcher.find()) {
+					if (!foundPayloads.contains(matcher.group())) {
+						foundPayloads.add(matcher.group());
+					}
 
+				}
+				
 				if (requestResponse.response() != null) {
 					// gets all matches in responses
-					Matcher matcher = getPayloadPattern().matcher(requestResponse.response().toString());
+					matcher = getPayloadPattern().matcher(requestResponse.response().toString());
 
 					while (matcher.find()) {
 						if (!foundPayloads.contains(matcher.group())) {

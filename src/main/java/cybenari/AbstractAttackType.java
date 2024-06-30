@@ -14,6 +14,7 @@ public abstract class AbstractAttackType {
 		CustomRule
 	}
 	
+	
 	public abstract AttackTypeName getAttackTypeName();
 	
 	//checks if the test candidate is suitable for this type of attack

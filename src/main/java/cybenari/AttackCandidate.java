@@ -1,11 +1,17 @@
 package cybenari;
 
 import java.util.ArrayList;
+
+import burp.api.montoya.http.message.HttpHeader;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.http.message.responses.HttpResponse;
 import cybenari.AbstractAttackType.AttackTypeName;
 
 public class AttackCandidate {
+
+	public enum REPLACE_TYPE {
+		PATH, BODY, QUERY, HEADER_VALUE
+	}
 
 	private HttpRequest originalRequest;
 	private HttpRequest modifiedRequest;
@@ -16,6 +22,7 @@ public class AttackCandidate {
 	private String payload;
 	private String matchPlaceHolder = "§";
 	private String replacedPayload = "";
+	private REPLACE_TYPE replaceType;
 
 	// private ArrayList<HttpRequestWithPayloads> requestWithPayloads;
 	private AttackTypeName attackTypeName;
@@ -27,36 +34,56 @@ public class AttackCandidate {
 		// this.requestWithPayloads = new ArrayList<>();
 	}
 
-	//creates a clone of the attack candidates and replaces the place holders with payload
+	// creates a clone of the attack candidates and replaces the place holders with
+	// payload
 	public AttackCandidate cloneWithPayload(String payload) {
 		AttackCandidate clone = new AttackCandidate(getOriginalRequest(), getAttackTypeName());
 		clone.setOriginalResponse(originalResponse);
 		clone.setPayload(payload);
 		clone.setOriginalPayload(getOriginalPayload());
+		clone.setReplaceType(getReplaceType());
 
-		// is placeholder in path or body?
-		if (modifiedRequest.path().indexOf(matchPlaceHolder) > 0) {
-			// Find the first occurrence of 'X'
-			int firstPlaceHolder = modifiedRequest.path().indexOf(matchPlaceHolder);
-			// Find the second occurrence of 'X'
-			int secondPlaceHolder = modifiedRequest.path().indexOf(matchPlaceHolder, firstPlaceHolder + 1);
-		
-			String pathWithPayload = modifiedRequest.path().substring(0, firstPlaceHolder) + payload
-					+ modifiedRequest.path().substring(secondPlaceHolder + 1);
-			clone.setModifiedRequest(modifiedRequest.withPath(pathWithPayload));
-
-		} else {// placeholder is in the body
-			String body = modifiedRequest.bodyToString();
-			int firstPlaceHolder = body.indexOf(matchPlaceHolder);
-			int secondPlaceHolder = body.indexOf(matchPlaceHolder, firstPlaceHolder + 1);
-
+		if (getReplaceType() == REPLACE_TYPE.PATH || getReplaceType() == REPLACE_TYPE.QUERY) {
 			
-			String bodyWithPayload = body.substring(0, firstPlaceHolder) + payload
-					+ body.substring(secondPlaceHolder + 1);
-			clone.setModifiedRequest(modifiedRequest.withBody(bodyWithPayload));
-		}
+				String pathWithPayload = replaceWithPayload(modifiedRequest.path(),payload);
+				
+				clone.setModifiedRequest(modifiedRequest.withPath(pathWithPayload));
+
+			} else if (getReplaceType() == REPLACE_TYPE.BODY) {
+				String bodyWithPayload = replaceWithPayload(modifiedRequest.bodyToString(),payload);
+				
+				clone.setModifiedRequest(modifiedRequest.withBody(bodyWithPayload));
+				
+			} else if (getReplaceType() == REPLACE_TYPE.HEADER_VALUE) {
+
+				for(HttpHeader header : modifiedRequest.headers()) {
+					String maybeReplacedHeader = replaceWithPayload(header.value(),payload);
+					if(!maybeReplacedHeader.equals("")) {
+						clone.setModifiedRequest(modifiedRequest.withHeader(header.name(), maybeReplacedHeader));
+					}
+				}
+			}
+		
 
 		return clone;
+	}
+
+	// looks for the placeholders and replace everyhting between them with the
+	// payload
+	private String replaceWithPayload(String original, String payload) {
+
+		int firstPlaceHolder = original.indexOf(matchPlaceHolder);
+		int secondPlaceHolder = -1;
+		
+		if (firstPlaceHolder >= 0) {
+			// Find the second occurrence of '§'
+			secondPlaceHolder = original.indexOf(matchPlaceHolder, firstPlaceHolder + 1);
+		}
+
+		if (secondPlaceHolder >= 0) {
+			return original.substring(0, firstPlaceHolder) + payload + original.substring(secondPlaceHolder + 1);
+		}
+		return "";
 	}
 
 	public HttpRequest getOriginalRequest() {
@@ -83,10 +110,27 @@ public class AttackCandidate {
 		return attackTypeName;
 	}
 
-	// two candidates are equals i their modified url and body are the same
-	public boolean equals(AttackCandidate otherCandidate) {
-		return (this.getModifiedRequest().url().equals(otherCandidate.getModifiedRequest().url())
-				&& this.getModifiedRequest().body().equals(otherCandidate.getModifiedRequest().body()));
+	// two candidates are equals if their modified url, all header values and body are the same
+	@Override
+	public boolean equals(Object obj) {
+		AttackCandidate otherCandidate = (AttackCandidate) obj;
+		if (this.getModifiedRequest().url().equals(otherCandidate.getModifiedRequest().url())
+				&& this.getModifiedRequest().body().equals(otherCandidate.getModifiedRequest().body())) {
+			
+			for(HttpHeader header : getModifiedRequest().headers()) {
+				if(otherCandidate.modifiedRequest.hasHeader(header.name())) {
+					if(!header.value().equals(otherCandidate.modifiedRequest.headerValue(header.name()))) {
+						return false;
+					} else {
+						//header exactly matches, go to the next one
+						continue;
+					}
+				}
+				return false;
+			}
+			return true;
+		}
+		return false;
 	}
 
 	public boolean isEnabled() {
@@ -142,6 +186,14 @@ public class AttackCandidate {
 
 	public void setOriginalPayload(String replacedString) {
 		this.replacedPayload = replacedString;
+	}
+
+	public REPLACE_TYPE getReplaceType() {
+		return replaceType;
+	}
+
+	public void setReplaceType(REPLACE_TYPE replaceType) {
+		this.replaceType = replaceType;
 	}
 
 }

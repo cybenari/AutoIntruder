@@ -3,7 +3,7 @@ package cybenari;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.logging.Logging;
-import cybenari.models.AutoIntruderTab;
+
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import cybenari.models.RequestsTableModel;

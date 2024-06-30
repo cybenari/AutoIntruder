@@ -34,7 +34,7 @@ public class RequestsTableModel extends MyAbstractTableModel {
 
 	@Override
 	public int getColumnCount() {
-		return 6;
+		return 7;
 	}
 
 	@Override
@@ -52,6 +52,8 @@ public class RequestsTableModel extends MyAbstractTableModel {
 			return "Enabled";
 		case 5:
 			return "Original Payload";
+		case 6:
+			return "Change Type";
 		default:
 			return "";
 		}
@@ -80,10 +82,12 @@ public class RequestsTableModel extends MyAbstractTableModel {
 				case 4:
 					return candidate.isEnabledAsString();
 				case 5:
-					 if(candidate.getOriginalPayload() != null) {
+					if (candidate.getOriginalPayload() != null) {
 						return candidate.getOriginalPayload();
 					}
-					 return "";
+					return "";
+				case 6:
+					return candidate.getReplaceType().toString();
 				default:
 					return "";
 				}
@@ -94,8 +98,10 @@ public class RequestsTableModel extends MyAbstractTableModel {
 
 	public synchronized void add(AttackCandidate candidate) {
 		int index = log.size();
-		log.add(candidate);
-		fireTableRowsInserted(index, index);
+		if (!log.contains(candidate)) {
+			log.add(candidate);
+			fireTableRowsInserted(index, index);
+		}
 	}
 
 	public synchronized AttackCandidate get(int rowIndex) {

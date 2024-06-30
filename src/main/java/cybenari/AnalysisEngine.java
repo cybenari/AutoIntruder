@@ -1,6 +1,5 @@
 package cybenari;
 
-
 import java.util.ArrayList;
 import burp.api.montoya.logging.Logging;
 import burp.api.montoya.proxy.ProxyHttpRequestResponse;
@@ -57,10 +56,10 @@ public class AnalysisEngine {
 		return true;
 	}
 
-	//in order for request to be replaced 3 thins need to match:
-	//1) Request Filter Rules (AbstractRules)
-	//2) method type rules (GET,POST..)
-	//3) Parameter Type rules (Body,URL,PATH)
+	// in order for request to be replaced 3 thins need to match:
+	// 1) Request Filter Rules (AbstractRules)
+	// 2) method type rules (GET,POST..)
+	// 3) Parameter Type rules (Body,URL,PATH)
 	private ArrayList<AttackCandidate> createAttackCandidates(ProxyHttpRequestResponse requestResponse,
 			ArrayList<AbstractRule> rules, MatchRule paramRule) {
 		ArrayList<AttackCandidate> attackCandidates = new ArrayList<>();
@@ -81,19 +80,21 @@ public class AnalysisEngine {
 		boolean allAndRulesMatch = allAndRulesMatch(andRules, requestResponse);
 		boolean atLeastOneOrRuleMatches = atLeastOneOrRuleMatches(orRules, requestResponse);
 
-	
-		if (allAndRulesMatch || atLeastOneOrRuleMatches) {
-			
-				if (paramRule.isBodyParamEnabled()) {
+		if (rules.size() == 0 || allAndRulesMatch || atLeastOneOrRuleMatches) {
+
+			if (paramRule.isBodyParamEnabled()) {
 				attackCandidates.addAll(paramRule.findPatternInBody(requestResponse));
-				}
-				if (paramRule.isURLParamEnabled()) {
+			}
+			if (paramRule.isURLParamEnabled()) {
 				attackCandidates.addAll(paramRule.findPatternsInQuery(requestResponse));
-				}
-				if (paramRule.isPathParamEnabled()) {
+			}
+			if (paramRule.isPathParamEnabled()) {
 				attackCandidates.addAll(paramRule.findPatternsInPath(requestResponse));
-				}
-			
+			}
+			if (paramRule.isHeaderValuesEnabled()) {
+				attackCandidates.addAll(paramRule.findPatternsInHeaderValues(requestResponse));
+			}
+
 			return attackCandidates;
 		}
 
@@ -146,25 +147,5 @@ public class AnalysisEngine {
 		return attackCandidates;
 	}
 
-	/*
-	 * // checks all attack on all segments for a fit and returns an arraylist of
-	 * all // test candidates private ArrayList<AttackCandidate>
-	 * analyzeAllTestsOnAllSegments(HttpRequest request) {
-	 * 
-	 * ArrayList<AttackCandidate> testCandidates = new ArrayList<>();
-	 * 
-	 * for (AbstractAttackType attack : attacks) { if
-	 * (attack.isSuitableForAttack(request)) {
-	 * 
-	 * String result = "Found suitable: " + (attack.getAttackTypeName()).toString()
-	 * + " url: " + request.url(); System.out.println(result);
-	 * 
-	 * testCandidates.addAll(attack.createAttackCandidates(request));
-	 * 
-	 * // testCandidates.addAll(attack.createAttackRequests(url)); } }
-	 * 
-	 * 
-	 * 
-	 * return testCandidates; }
-	 */
+
 }
