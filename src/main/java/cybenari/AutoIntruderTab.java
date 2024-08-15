@@ -7,9 +7,14 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseAdapter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -81,7 +86,7 @@ public class AutoIntruderTab extends JPanel {
 		// Adding tabs to the tabbed pane
 		tabbedPane.addTab("Configuration", generateConfigurationPanel(logging, requestsTableModel));
 		tabbedPane.addTab("Payloads", generatePayloadsPanel(requestsTableModel, resultsTableModel));
-		tabbedPane.addTab("Results", generateResultsPanel(resultsTableModel));
+		tabbedPane.addTab("Requests", generateResultsPanel(resultsTableModel));
 
 		// Adding the tabbed pane to the Main Panel
 		mainPanel.add(tabbedPane);
@@ -100,7 +105,7 @@ public class AutoIntruderTab extends JPanel {
 		UserInterface userInterface = api.userInterface();
 
 		HttpRequestEditor originalRequestViewer = userInterface.createHttpRequestEditor(READ_ONLY);
-		HttpRequestEditor modifiedRequestViewer = userInterface.createHttpRequestEditor(READ_ONLY);
+		HttpRequestEditor modifiedRequestViewer = userInterface.createHttpRequestEditor();
 		HttpResponseEditor originalResponseViewer = userInterface.createHttpResponseEditor(READ_ONLY);
 		HttpResponseEditor modifiedResponseViewer = userInterface.createHttpResponseEditor(READ_ONLY);
 
@@ -126,6 +131,10 @@ public class AutoIntruderTab extends JPanel {
 			public void changeSelection(int rowIndex, int columnIndex, boolean toggle, boolean extend) {
 				// show the log entry for the selected row
 
+				HttpRequest modifiedRequest = modifiedRequestViewer.getRequest();
+
+				// saveChangesToTableItem(this, resultsTableModel, modifiedRequest);
+
 				int modelRow = convertRowIndexToModel(rowIndex);
 				AttackCandidate candidate = resultsTableModel.get(modelRow);
 				originalRequestViewer.setRequest(candidate.getOriginalRequest());
@@ -137,6 +146,12 @@ public class AutoIntruderTab extends JPanel {
 			}
 
 		};
+
+		// ugly :( but here i'm adding a keyboard event listener and a mouse event
+		// listener to all components under the modified requests tab
+		addKeyListenerToAllComponents(modifiedRequestResponseSplitPane,
+				getKeyListerner(table, resultsTableModel, modifiedRequestViewer),
+				getMouseListener(table, resultsTableModel, modifiedRequestViewer));
 
 		TableRowSorter<ResultsTableModel> sorter = new TableRowSorter<>(resultsTableModel);
 		table.setRowSorter(sorter);
@@ -337,8 +352,8 @@ public class AutoIntruderTab extends JPanel {
 		paramTypePanel.add(bodyParamsCheckbox);
 		paramTypePanel.add(headerValuesParamsCheckbox);
 
-		JButton generateRequestsButton = new JButton("Generate Requests");
-		generateRequestsButton.addMouseListener(new MouseAdapter() {
+		JButton findRequestsButton = new JButton("Find matching Requests");
+		findRequestsButton.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(MouseEvent e) {
 
@@ -377,6 +392,7 @@ public class AutoIntruderTab extends JPanel {
 							if (!tableModel.contains(candidate)) {
 								tableModel.add(candidate);
 							}
+
 						}
 					}
 
@@ -440,7 +456,7 @@ public class AutoIntruderTab extends JPanel {
 		leftPanel.add(rulesButtonsPanel, gbc);
 
 		gbc.gridy = 11;
-		leftPanel.add(generateRequestsButton, gbc);
+		leftPanel.add(findRequestsButton, gbc);
 
 		configurationTab.add(splitPane, BorderLayout.CENTER);
 
@@ -655,14 +671,6 @@ public class AutoIntruderTab extends JPanel {
 				int modelRow = convertRowIndexToModel(rowIndex);
 				// auto save request each time selection is changed
 
-				HttpRequest modifiedRequest = modifiedRequestViewer.getRequest();
-				
-				if (modificationIsValid(modifiedRequest)) {
-					saveChangesToTableItem(this, requestsTableModel, modifiedRequest);
-				} else {
-					JOptionPane.showMessageDialog(this, "Number of § must be 2");
-				}
-
 				// updated view
 				AttackCandidate candidate = tableModel.get(modelRow);
 				originalRequestViewer.setRequest(candidate.getOriginalRequest());
@@ -672,29 +680,13 @@ public class AutoIntruderTab extends JPanel {
 				super.changeSelection(rowIndex, columnIndex, toggle, extend);
 			}
 
-			private boolean modificationIsValid(HttpRequest modifiedRequest) {
-				int count = 0;
-				String requestString = modifiedRequest.toString();
-				for (int i = 0; i < requestString.length(); i++) {
-					if (requestString.charAt(i) == '§') {
-						count++;
-					}
-
-					if (count > 2) {
-						return false; // Early exit if more than 2 '$' characters found
-					}
-				}
-
-				return count == 2;
-
-			}
-
 		};
 
-		if (modifiedRequestViewer.isModified()) {
-			System.out.println("change");
-
-		}
+		// ugly :( but here i'm adding a keyboard event listener and a mouse event
+		// listener to all components under the modified requests tab
+		addKeyListenerToAllComponents(modifiedRequestResponseSplitPane,
+				getKeyListerner(table, requestsTableModel, modifiedRequestViewer),
+				getMouseListener(table, requestsTableModel, modifiedRequestViewer));
 
 		TableRowSorter<RequestsTableModel> sorter = new TableRowSorter<>(tableModel);
 		table.setRowSorter(sorter);
@@ -703,12 +695,10 @@ public class AutoIntruderTab extends JPanel {
 		JMenuItem disableMenuItemView = new JMenuItem("Disable");
 		JMenuItem enableMenuItemView = new JMenuItem("Enable");
 		JMenuItem deleteMenuItemView = new JMenuItem("Delete");
-		
+
 		popupMenu.add(disableMenuItemView);
 		popupMenu.add(enableMenuItemView);
 		popupMenu.add(deleteMenuItemView);
-		
-
 
 		// right click->delete item
 		deleteMenuItemView.addActionListener(e -> {
@@ -782,6 +772,107 @@ public class AutoIntruderTab extends JPanel {
 		return newRequestsTab;
 	}
 
+	private KeyListener getKeyListerner(JTable table, MyAbstractTableModel model,
+			HttpRequestEditor modifiedRequestViewer) {
+		KeyListener keyListener = new KeyListener() {
+			@Override
+			public void keyTyped(KeyEvent e) {
+
+			}
+
+			@Override
+			public void keyPressed(KeyEvent e) {
+				saveChanges(e);
+			}
+
+			@Override
+			public void keyReleased(KeyEvent e) {
+
+			}
+
+			private void saveChanges(KeyEvent e) {
+				System.out.println("Key event detected: " + KeyEvent.getKeyText(e.getKeyCode()) + " in "
+						+ e.getComponent().getClass().getSimpleName());
+				HttpRequest modifiedRequest = modifiedRequestViewer.getRequest();
+				saveChangesToTableItem(table, model, modifiedRequest);
+
+			}
+		};
+		return keyListener;
+	}
+
+	private MouseListener getMouseListener(JTable table, MyAbstractTableModel model,
+			HttpRequestEditor modifiedRequestViewer) {
+		MouseListener mouseListener = new MouseListener() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				// Not needed for mouse exit detection
+			}
+
+			@Override
+			public void mousePressed(MouseEvent e) {
+				// Not needed for mouse exit detection
+			}
+
+			@Override
+			public void mouseReleased(MouseEvent e) {
+				// Not needed for mouse exit detection
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				// Not needed for mouse exit detection
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e) {
+				saveChanges(e);
+			}
+
+			private void saveChanges(MouseEvent e) {
+				System.out.println("Mouse exited " + e.getComponent().getClass().getSimpleName());
+				HttpRequest modifiedRequest = modifiedRequestViewer.getRequest();
+				saveChangesToTableItem(table, model, modifiedRequest);
+			}
+		};
+		return mouseListener;
+	}
+
+	// this is needed in order to detect any key presses on the editor tab, so I can
+	// save any changes to it
+	// we are adding a listener to all child components recursively and saving after
+	// each key press.
+	private void addKeyListenerToAllComponents(Container container, KeyListener keyListener,
+			MouseListener mouseListener) {
+		for (Component component : container.getComponents()) {
+			// Add the KeyListener to the component
+			component.addKeyListener(keyListener);
+			component.addMouseListener(mouseListener);
+
+			// If the component is a container, recurse into it
+			if (component instanceof Container) {
+				addKeyListenerToAllComponents((Container) component, keyListener, mouseListener);
+			}
+		}
+	}
+
+	private boolean modificationIsValid(HttpRequest modifiedRequest) {
+		int count = 0;
+		String requestString = modifiedRequest.toString();
+		for (int i = 0; i < requestString.length(); i++) {
+			if (requestString.charAt(i) == '§') {
+				count++;
+			}
+
+			if (count > 2) {
+				return false; // Early exit if more than 2 '$' characters found
+			}
+		}
+
+		return count == 2;
+
+	}
+
 	private void removeSelectedItems(JTable table, MyAbstractTableModel myModel) {
 
 		int[] selectedIndecies = table.getSelectedRows();
@@ -809,7 +900,7 @@ public class AutoIntruderTab extends JPanel {
 	private void saveChangesToTableItem(JTable table, MyAbstractTableModel myModel, HttpRequest modifiedRequest) {
 		int selectRowIndex = table.getSelectedRow();
 
-		if (selectRowIndex > 0) {
+		if (selectRowIndex >= 0) {
 			int modelIndex = table.convertRowIndexToModel(selectRowIndex);
 
 			AttackCandidate candidate = myModel.get(modelIndex);
@@ -913,7 +1004,7 @@ public class AutoIntruderTab extends JPanel {
 		JButton removeButton = new JButton("Remove");
 		JButton clearButton = new JButton("Clear");
 		JButton pasteButton = new JButton("Paste");
-		JButton generatetAttackButton = new JButton("Generate Attack Candidates");
+		JButton generatetAttackButton = new JButton("Attach Payloads");
 
 		JTextField addTextField = new JTextField(30); // text field with 10 columns
 
@@ -949,16 +1040,28 @@ public class AutoIntruderTab extends JPanel {
 		});
 
 		generatetAttackButton.addActionListener(e -> {
+			ArrayList<AttackCandidate> invalidCandidates = new ArrayList();
 
-			for (AttackCandidate candidate : requestsTableModel.getAllEnabled()) {
-				for (int i = 0; i < payloadsList.size(); i++) {
+			if (validPayloadsAndCandidateSizes(requestsTableModel.getAllEnabled(), payloadsList, payloadsPanel)) {
+				for (AttackCandidate candidate : requestsTableModel.getAllEnabled()) {
+					for (int i = 0; i < payloadsList.size(); i++) {
+						if (modificationIsValid(candidate.getModifiedRequest())) {
+							resultsTableModel.add(candidate.cloneWithPayload(payloadsList.get(i)));
+						} else {
+							invalidCandidates.add(candidate);
+						}
 
-					resultsTableModel.add(candidate.cloneWithPayload(payloadsList.get(i)));
+					}
+
+				}
+				if (invalidCandidates.size() > 0) {
+					JOptionPane.showMessageDialog(payloadsPanel, invalidCandidates.size()
+							+ " request/s have an invalid number of § placeholders. Only 2 are allowed per request.");
 				}
 
+				JOptionPane.showMessageDialog(payloadsPanel, "Requests Generated!");
 			}
 
-			JOptionPane.showMessageDialog(payloadsPanel, "Task Complete!");
 		});
 
 		// need to remove in reverse order (from large to small)
@@ -1022,5 +1125,19 @@ public class AutoIntruderTab extends JPanel {
 		payloadsPanel.add(buttomPanel, BorderLayout.SOUTH);
 
 		return payloadsPanel;
+	}
+
+	private boolean validPayloadsAndCandidateSizes(ArrayList<AttackCandidate> enabledCandidates,
+			DefaultListModel<String> payloads, Component c) {
+		if (payloads.size() == 0) {
+			JOptionPane.showMessageDialog(c, "Payload count cannot be 0.");
+			return false;
+		}
+		if (enabledCandidates.size() == 0) {
+			JOptionPane.showMessageDialog(c, "Requests count cannot be 0.");
+			return false;
+		}
+		return true;
+
 	}
 }

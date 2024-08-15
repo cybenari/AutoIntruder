@@ -44,26 +44,25 @@ public class AttackCandidate {
 		clone.setReplaceType(getReplaceType());
 
 		if (getReplaceType() == REPLACE_TYPE.PATH || getReplaceType() == REPLACE_TYPE.QUERY) {
-			
-				String pathWithPayload = replaceWithPayload(modifiedRequest.path(),payload);
-				
-				clone.setModifiedRequest(modifiedRequest.withPath(pathWithPayload));
 
-			} else if (getReplaceType() == REPLACE_TYPE.BODY) {
-				String bodyWithPayload = replaceWithPayload(modifiedRequest.bodyToString(),payload);
-				
-				clone.setModifiedRequest(modifiedRequest.withBody(bodyWithPayload));
-				
-			} else if (getReplaceType() == REPLACE_TYPE.HEADER_VALUE) {
+			String pathWithPayload = replaceWithPayload(modifiedRequest.path(), payload);
 
-				for(HttpHeader header : modifiedRequest.headers()) {
-					String maybeReplacedHeader = replaceWithPayload(header.value(),payload);
-					if(!maybeReplacedHeader.equals("")) {
-						clone.setModifiedRequest(modifiedRequest.withHeader(header.name(), maybeReplacedHeader));
-					}
+			clone.setModifiedRequest(modifiedRequest.withPath(pathWithPayload));
+
+		} else if (getReplaceType() == REPLACE_TYPE.BODY) {
+			String bodyWithPayload = replaceWithPayload(modifiedRequest.bodyToString(), payload);
+
+			clone.setModifiedRequest(modifiedRequest.withBody(bodyWithPayload));
+
+		} else if (getReplaceType() == REPLACE_TYPE.HEADER_VALUE) {
+
+			for (HttpHeader header : modifiedRequest.headers()) {
+				String maybeReplacedHeader = replaceWithPayload(header.value(), payload);
+				if (!maybeReplacedHeader.equals("")) {
+					clone.setModifiedRequest(modifiedRequest.withHeader(header.name(), maybeReplacedHeader));
 				}
 			}
-		
+		}
 
 		return clone;
 	}
@@ -74,7 +73,7 @@ public class AttackCandidate {
 
 		int firstPlaceHolder = original.indexOf(matchPlaceHolder);
 		int secondPlaceHolder = -1;
-		
+
 		if (firstPlaceHolder >= 0) {
 			// Find the second occurrence of '§'
 			secondPlaceHolder = original.indexOf(matchPlaceHolder, firstPlaceHolder + 1);
@@ -110,19 +109,20 @@ public class AttackCandidate {
 		return attackTypeName;
 	}
 
-	// two candidates are equals if their modified url, all header values and body are the same
+	// two candidates are equals if their modified url, all header values and body
+	// are the same
 	@Override
 	public boolean equals(Object obj) {
 		AttackCandidate otherCandidate = (AttackCandidate) obj;
 		if (this.getModifiedRequest().url().equals(otherCandidate.getModifiedRequest().url())
 				&& this.getModifiedRequest().body().equals(otherCandidate.getModifiedRequest().body())) {
-			
-			for(HttpHeader header : getModifiedRequest().headers()) {
-				if(otherCandidate.modifiedRequest.hasHeader(header.name())) {
-					if(!header.value().equals(otherCandidate.modifiedRequest.headerValue(header.name()))) {
+
+			for (HttpHeader header : getModifiedRequest().headers()) {
+				if (otherCandidate.modifiedRequest.hasHeader(header.name())) {
+					if (!header.value().equals(otherCandidate.modifiedRequest.headerValue(header.name()))) {
 						return false;
 					} else {
-						//header exactly matches, go to the next one
+						// header exactly matches, go to the next one
 						continue;
 					}
 				}
