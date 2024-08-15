@@ -791,8 +791,7 @@ public class AutoIntruderTab extends JPanel {
 			}
 
 			private void saveChanges(KeyEvent e) {
-				System.out.println("Key event detected: " + KeyEvent.getKeyText(e.getKeyCode()) + " in "
-						+ e.getComponent().getClass().getSimpleName());
+				
 				HttpRequest modifiedRequest = modifiedRequestViewer.getRequest();
 				saveChangesToTableItem(table, model, modifiedRequest);
 
@@ -830,7 +829,7 @@ public class AutoIntruderTab extends JPanel {
 			}
 
 			private void saveChanges(MouseEvent e) {
-				System.out.println("Mouse exited " + e.getComponent().getClass().getSimpleName());
+				
 				HttpRequest modifiedRequest = modifiedRequestViewer.getRequest();
 				saveChangesToTableItem(table, model, modifiedRequest);
 			}
