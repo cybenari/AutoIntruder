@@ -5,12 +5,48 @@ of the the pattern in the request history.
 
 
 
-## Table of Contents
+## Description
+AutoIntruder is an extension for Burp Suite that help security researchers find security vulnerabilities, by matching and replacing strings from their proxy history on mass.
 
-- [Installation](#installation)
-- [Usage](#usage)
-- [Typical Use Case](#typical-use-case)
-- [Contact](#contact)
+AutoIntruder works by allowing users to match requests from their browsing history and that fit a pattern the the user configures. Next the user add his payloads. Then AutoIntruder replaces the matched requests with the payloads and sends them to the target.
+
+## Demo
+
+![Demo GIF](media/AutoIntruderDemo.gif)
+
+
+
+
+## Usage
+Using the tool requires 4 steps:
+
+```sh
+1. Configure- Define the regex pattern you want to use. This will can AutoIntruder to search through your proxy history for any requests that match the pattern. 
+
+1.a (Optional) You can further filter the request AutoIntruder matches, by configuring the filter rules.
+1.b (Optional) Disable/Enable or edit any request AutoIntruder finds.
+
+2. Payloads - Add any payloads you want. Payloads can be added manually or using the Auto Payload Generator, which looks through the proxy history for any payloads that match the given pattern
+
+3. Disable/Enable or edit any request AutoIntruder has generated under the Request tab.
+
+4. Fire the requests and find some vulns.
+```
+
+## Features
+
+ - Multi-Threaded request sender.
+ - Ability to grep for requests from history according to regex and configurable rules.
+ - Ability to grep for payloads according to regex patterns.
+ - Requests can be manually edited before being sent.
+ - Uses the Montoya API
+
+
+## Use cases
+
+1) Finding IDORs by grepping for UUIDs and replacing them other UUIDs
+2) Findings SSRFs by grepping for URLs/IP addresses and replacing them with a Collaborator link
+3) Custom fuzzing by grepping for custom patterns and replacing them with fuzzing payloads
 
 ## Installation
 
@@ -26,29 +62,8 @@ of the the pattern in the request history.
     ```sh
     mvn package
     ```
-4. Run the project:
+4. Run the project by loading the generated JAR file as a BurpSuite Extension.
     
-    Load the generated JAR file as a BurpSuite Extension.
-    
-
-## Usage
-```sh
-Step 1. Create a regex pattern you want AutoIntruder to find in the Proxy history
-Step 2. Add some filter rules (Like only requests that are in scope)
-Step 3. Add some payloads in the payloads tab
-Step 4. Decide which requests you want to enable and which to disable
-Step 5. Send the requests
-Step 6. Find vulns
-```
-
-
-## Typical Use Case
-You are performing a penteration test/Bug Bounty/Research and you want to test for IDORs, but the application is BIG and there are a lot of places where the app is using UUIDs if object ids.
-In such a case you can configure the parameter pattern to be a UUID Regex Pattern. Next you can add some rules to the filter and exclude the DELETE method (So you won't accidently delete anything important). 
-Next you'll want AutoIntruder to automatically generate all the payloads found in the scope that match a UUID pattern (and this is where the power of this tools really comes into play).
-Now in the Results tab is populated with list of requests (unsent yet) of all the combinations of requests that match the parameter pattern and the payload patterns. 
-You fire up the requests and look for responses that return a 200 OK (but probably should have returned a 403). 
-You go over the these 200 OK responses and find an IDOR Hurray!
 
 ## Contact
 idan@cybenari.com
